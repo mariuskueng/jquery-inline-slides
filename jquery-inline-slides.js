@@ -2,7 +2,7 @@
  * jQuery Plugin to display an inline slideshow with css3 transforms and fallback
  * 
  * @author Jérémie Blaser, Marius Küng allink.creative (http://allink.ch)
- * @version 1.0 (2012-05-22)
+ * @version 1.1 (2012-08-7)
  */
  (function($){
     $.inlineSlides = function(el, slides, options){
@@ -20,25 +20,26 @@
 
         base.init = function(){
             if( typeof( slides ) === "undefined" || slides === null ) slides = [];
-
             base.slides = slides;
-            base.count = slides.length;
-            base.$el.width(base.count * base.$el.width());
 
             base.options = $.extend({},$.inlineSlides.defaultOptions, options);
             // determine slide width from the wrapper div if not given as an option
             base.slideWidth = base.options.width || base.$el.parent().width();
+            base.count = base.options.count || slides.length;
+            base.$el.width(base.count * base.$el.width());
 
             for (var i = 0; i < base.slides.length; i++) {
                 var slide = base.slides[i];
                 var slideContent;
                 if (base.options.type == 'div'){
                     slideContent = '<div style="width:'+base.slideWidth+'px; background-image: url(' + slide.image + ');"></div>';
+                    if(base.options.detail){
+                        if(base.options.detail.inside)
+                            slideContent = '<div style="background-image: url(' + slide.image + ');"><div class="' + base.options.detail.inside + '">' + slide.desc.inside + '</div></div>';
+                    }
                     if(slide.link){
                         slideContent = $(slideContent).data('link', slide.link);
-                        slideContent.click(function(){
-                            document.location.href = $(this).data('link');
-                        }).css('cursor', 'pointer');
+                        slideContent.click(base.clickImageLink).css('cursor', 'pointer');
                     }
                     base.$el.append(slideContent);
                 }
@@ -52,8 +53,8 @@
 
                 // setup pager
                 if(base.options.pager && base.slides.length > 1){
-                    var link = $('<a href="#"><li></li></a>');
-                    link.click(base.clickLink);
+                    var link = $('<a href="#" class="a'+ i +'"><li></li></a>');
+                    link.click(base.clickPagerItem);
                     base.options.pager.append(link);
                 }
             }
@@ -63,7 +64,9 @@
             base.transitionProp = base.getCSSProp('transition');
 
             // set transition for the base element
-            base.$el.css(base.transitionProp, 'all ' + base.options.duration + ' ' + base.options.easing);
+            if (base.transitionProp) {
+                base.$el.css(base.transitionProp, 'all ' + base.options.duration + ' ' + base.options.easing);
+            }
 
             // detect & setup touchwipe
             if ($.fn.touchwipe) {
@@ -92,27 +95,30 @@
 
             base.showSlideNr(0);
         };
-        base.clickLink = function(e){
-            var index = Array.prototype.indexOf.call(base.options.pager.children(), e.target.parentNode);
+
+        base.clickImageLink = function(){
+            document.location.href = $(this).data('link');
+        };
+        base.clickPagerItem = function(e){
+            var index = $.inArray(e.target.parentNode, base.options.pager.children());
             base.showSlideNr(index);
             return false;
         };
 
         base.slideLeft = function(){
-            if (base.currentIndex < base.count) base.showSlideNr(base.currentIndex + 1);
+            if (base.currentIndex +1 < base.count) base.showSlideNr(base.currentIndex + 1);
         };
         base.slideRight = function(){
             if (base.currentIndex > 0) base.showSlideNr(base.currentIndex - 1);
         };
         base.showSlideNr = function(index){
             var slide = base.slides[index];
-            if (!slide) return;
             base.currentIndex = index;
 
             // update slide description
             if (base.options.detail){
-                if(base.options.detail.mobile)
-                    base.options.detail.mobile.html(slide.desc.mobile);
+                if(base.options.detail.outside)
+                    base.options.detail.outside.html(slide.desc.outside);
                 else
                     base.options.detail.html(slide.desc);
             }
@@ -138,6 +144,9 @@
                 base.options.pager.children().removeClass('active');
                 $(base.options.pager.children()[index]).addClass('active');
             }
+            if (base.options.numericPager !== null) {
+                base.options.numericPager.html((index+1) + base.options.numericPagerSeparator + base.count);
+            }
 
             // update buttons
             if (base.options.leftButton !== null) {
@@ -147,6 +156,9 @@
             if (base.options.rightButton !== null) {
                 if (index === base.count-1) base.options.rightButton.removeClass('active');
                 else base.options.rightButton.addClass('active');
+            }
+            if (base.options.slideChangeCallback !== null && typeof(base.options.slideChangeCallback) == 'function') {
+                base.options.slideChangeCallback(index);
             }
         };
 
@@ -160,8 +172,8 @@
             var v = vendorPrefixes;
             pu = p.charAt(0).toUpperCase() + p.substr(1);
             for(var i=0; i<v.length; i++) {
-                if(typeof s[v[i] + pu] == 'string') { 
-                    return '-'+ v[i].toLowerCase() +'-'+ p; 
+                if(typeof s[v[i] + pu] == 'string') {
+                    return '-'+ v[i].toLowerCase() +'-'+ p;
                 }
             }
             return false;
@@ -173,12 +185,15 @@
 
     $.inlineSlides.defaultOptions = {
         pager: null,
+        numericPager: null,
+        numericPagerSeparator: ' / ',
         detail: null,
         duration: '0.4s',
         easing: 'ease-in-out',
         type: 'div',
         rightButton: null,
-        leftButton: null
+        leftButton: null,
+        slideChangeCallback: null
     };
 
     $.fn.inlineSlides = function(slides, options){
